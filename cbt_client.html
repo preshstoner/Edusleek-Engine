@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>NBA Secure CBT Client</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; background: #f4f7f6; }
+            .card {background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); max-width: 600px; margin: auto; }
+            .timer {font-size: 24px; color: #d9534f; font-weight: bold; float: right; }
+            button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+            button:hover {background: #0056b3; }
+        </style>
+    </head>
+    <body>
+
+        <div class="card">
+            <div id="timer" class="timer">60:00</div>
+            <h2>NBA Offline-First CBT Terminal</h2>
+            <p><strong>Student:</strong> STU-9921 | <strong>Exam:</strong> Advanced Mathematics</p>
+            <hr>
+
+            <div id="question-container">
+                <h3 id="q-title">Question 1: What is the decimal value of binary 1010?</h3>
+                <label><input type="radio" name="ans" value="A"> A) 8</label><br>
+                <label><input type="radio" name="ans" value="B"> B) 10</label><br>
+                <label><input type="radio" name="ans" value="C"> C) 12</label><br>
+            </div>
+
+            <br>
+            <button onclick="nextQuestion()">Save and Next Question</button>
+            <p id="sync-status" style="color: green; font-size: 12px; margin-top: 15px;"></p>
+        </div>
+
+        <script>
+            const STUDENT_ID = "STU-9921";
+            const EXAM_ID = "MATH-101";
+
+            //State management structure
+            let examState = {
+                current_question_index: 0,
+                saved_answers: {},
+                remaining_seconds: 3600
+            };
+
+            // 1. Load state from browser LocalStorage immediately on boot (Offline fallback)
+            function loadLocalState(){
+                const cached = localStorage.getItem(`cbt_${EXAM_ID}_${STUDENT_ID}`);
+                if (cached) {
+                    examState = JSON.parse(cached);
+                    document.getElementById("sync-status").innerText = "Restored seamlessly from local browser cache!";
+                }
+            } 
+
+            // 2. Save state locally and background-sync to FastAPI server
+            function persistAndSyncState(){
+                // Save locally to protect against immediate power loss
+                localStorage.setItem(`cbt_${EXAM_ID}_${STUDENT_ID}`, JSON.stringify(examState));
+
+                // Background sync to server
+                fetch('http://localhost:8000/api/cbt/sync-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: STUDENT_ID, 
+                        exam_id: EXAM_ID,
+                        current_question_index: examState.current_question_index,
+                        saved_answers: examState.saved_answers,
+                        remaining_seconds: examState.remaining_seconds
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("sync-status").innerText = "State safely synchronized with server & local storage.";
+                })
+                .catch(err => {
+                    document.getElementById("sync-status").style.color = "orange";
+                    document.getElementById("sync-status").innerText = "Network offline-running safely on local cache backup.";
+                })
+            }
+
+            function nextQuestion(){
+                // Capture selected answer
+                const selected = document.querySelector('input[name="ans"]:checked');
+                if (selected) {
+                    examState.saved_answers[`q_${examState.current_question_index}`] = selected.value;
+                }
+                examState.current_question_index++;
+                persistAndSyncState();
+                alert("Progress saved locally and synced!");
+            }
+
+            // Initialize on load
+            loadLocalState();
+            
+        </script>
+    </body>
+</html>
